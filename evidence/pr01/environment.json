@@ -1,0 +1,12 @@
+{
+  "launch_method": "native",
+  "os": "Ubuntu 24.04.4 LTS",
+  "ros_distro": "jazzy",
+  "gazebo": "Harmonic 8.11.0",
+  "rmw": "rmw_fastrtps_cpp",
+  "domains": {
+    "default": 16,
+    "broken": 17,
+    "fixed": 16
+  }
+}
