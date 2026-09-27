@@ -24,9 +24,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Validate environment JSON
+      - name: Build PR02 launch package
         shell: bash
-        run: python3 -m json.tool evidence/pr01/environment.json > /dev/null
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          colcon build --symlink-install --packages-select turtle_bringup
+          source install/setup.bash
+          test -f "$(ros2 pkg prefix turtle_bringup)/share/turtle_bringup/launch/sim.launch.py"
+          python3 -m py_compile src/turtle_bringup/launch/sim.launch.py
       - name: Download course kit
         shell: bash
         run: |
@@ -36,4 +41,4 @@ jobs:
           tar -xzf course-kit.tar.gz -C .course-kit
       - name: Check PR evidence
         shell: bash
-        run: python3 .course-kit/v1/tools/check_practice.py PR01 --submission .
+        run: python3 .course-kit/v1/tools/check_practice.py PR02 --submission .
