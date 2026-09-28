@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "practice_id": "PR03",
+  "commit": "96927012d0408424ebabb5d122222168d3c8b726",
+  "course_kit": {
+    "version": "v1-w03",
+    "archive_sha256": "7fbfd3e8161ab6c6ebefc7663efdaf77d9a7d490399743507f33dcefbd5ac522"
+  },
+  "commands": [
+    "colcon build --symlink-install --packages-select patrol",
+    "python3 -m pytest src/patrol/test",
+    "ros2 run patrol patrol",
+    "ros2 topic info cmd_vel --verbose",
+    "ros2 topic info /turtle1/cmd_vel --verbose",
+    "ros2 run patrol patrol --ros-args -r cmd_vel:=/turtle1/cmd_vel",
+    "ros2 topic hz /turtle1/cmd_vel"
+  ],
+  "tests": [
+    {
+      "name": "test_compute_cmd_vel_without_pose",
+      "status": "passed"
+    },
+    {
+      "name": "test_compute_cmd_vel_with_pose",
+      "status": "passed"
+    }
+  ],
+  "defect": {
+    "reproducer": "ros2 run patrol patrol",
+    "root_cause": "Издатель ноды patrol публикует команды в относительный топик cmd_vel (/cmd_vel), в то время как turtlesim слушает топик /turtle1/cmd_vel. Из-за несовпадения полного имени топика команды не доходят до черепахи.",
+    "proof_after": "Переназначение имени топика при запуске (ros2 run patrol patrol --ros-args -r cmd_vel:=/turtle1/cmd_vel) связывает издателя с подписчиком /turtle1/cmd_vel, черепаха непрерывно движется с частотой публикации ~10 Гц."
+  },
+  "time": {
+    "contact_academic_hours": 2,
+    "self_study_hours": 2
+  },
+  "ai_used": true,
+  "claims": {
+    "public_tests_passed": true,
+    "defect_reproduced": true,
+    "defect_fixed": true
+  }
+}
