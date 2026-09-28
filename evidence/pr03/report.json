@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "practice_id": "PR03",
-  "commit": "96927012d0408424ebabb5d122222168d3c8b726",
+  "commit": "f0c72c2e62903ae7d51ee4f262cdbbafacca4783",
   "course_kit": {
     "version": "v1-w03",
     "archive_sha256": "7fbfd3e8161ab6c6ebefc7663efdaf77d9a7d490399743507f33dcefbd5ac522"
@@ -13,7 +13,8 @@
     "ros2 topic info cmd_vel --verbose",
     "ros2 topic info /turtle1/cmd_vel --verbose",
     "ros2 run patrol patrol --ros-args -r cmd_vel:=/turtle1/cmd_vel",
-    "ros2 topic hz /turtle1/cmd_vel"
+    "ros2 topic hz /turtle1/cmd_vel",
+    "ros2 run patrol draw_route"
   ],
   "tests": [
     {
@@ -22,6 +23,34 @@
     },
     {
       "name": "test_compute_cmd_vel_with_pose",
+      "status": "passed"
+    },
+    {
+      "name": "test_canvas_to_turtlesim_corners",
+      "status": "passed"
+    },
+    {
+      "name": "test_turtlesim_to_canvas_roundtrip",
+      "status": "passed"
+    },
+    {
+      "name": "test_normalize_angle",
+      "status": "passed"
+    },
+    {
+      "name": "test_filter_and_interpolate_points",
+      "status": "passed"
+    },
+    {
+      "name": "test_compute_route_step_target_reached",
+      "status": "passed"
+    },
+    {
+      "name": "test_compute_route_step_turn_in_place",
+      "status": "passed"
+    },
+    {
+      "name": "test_compute_route_step_move_forward",
       "status": "passed"
     }
   ],
