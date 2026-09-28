@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'patrol = patrol.patrol_node:main',
+            'draw_route = patrol.draw_route_node:main',
         ],
     },
 )
