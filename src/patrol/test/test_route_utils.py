@@ -2,10 +2,15 @@ import math
 
 from patrol.route_utils import (
     canvas_to_turtlesim,
+    compute_cross_track_error,
     compute_route_step,
     filter_and_interpolate_points,
     normalize_angle,
+    point_to_segment_distance,
     turtlesim_to_canvas,
+    validate_goal_tolerance,
+    validate_max_speed,
+    validate_turn_gain,
 )
 
 W = 500
@@ -106,3 +111,100 @@ def test_compute_route_step_move_forward():
     assert lin_x > 0.0
     assert lin_x <= 0.5
     assert -1.0 <= ang_z <= 1.0
+
+
+def test_validate_max_speed():
+    assert validate_max_speed(0.1)[0] is True
+    assert validate_max_speed(0.5)[0] is True
+    assert validate_max_speed(2.0)[0] is True
+    # Отклонение нуля, отрицательных и слишком больших значений
+    assert validate_max_speed(0.0)[0] is False
+    assert validate_max_speed(-0.5)[0] is False
+    assert validate_max_speed(2.5)[0] is False
+    assert validate_max_speed(float('nan'))[0] is False
+    assert validate_max_speed(float('inf'))[0] is False
+
+
+def test_validate_goal_tolerance_rejection():
+    # Допустимые значения
+    assert validate_goal_tolerance(0.02)[0] is True
+    assert validate_goal_tolerance(0.1)[0] is True
+    assert validate_goal_tolerance(1.0)[0] is True
+    # Требование задания: нулевая и отрицательная точность строго отклоняются!
+    ok_zero, reason_zero = validate_goal_tolerance(0.0)
+    assert ok_zero is False
+    assert "positive" in reason_zero
+
+    ok_neg, reason_neg = validate_goal_tolerance(-0.1)
+    assert ok_neg is False
+    assert "positive" in reason_neg
+
+    assert validate_goal_tolerance(1.5)[0] is False
+    assert validate_goal_tolerance(float('nan'))[0] is False
+    assert validate_goal_tolerance(float('inf'))[0] is False
+
+
+def test_validate_turn_gain():
+    assert validate_turn_gain(0.1)[0] is True
+    assert validate_turn_gain(2.0)[0] is True
+    assert validate_turn_gain(10.0)[0] is True
+    assert validate_turn_gain(0.0)[0] is False
+    assert validate_turn_gain(-1.0)[0] is False
+    assert validate_turn_gain(15.0)[0] is False
+    assert validate_turn_gain(float('nan'))[0] is False
+
+
+def test_compute_cross_track_error():
+    route = [(1.0, 1.0), (5.0, 1.0), (5.0, 5.0)]
+    # Точка лежит точно на отрезке
+    assert math.isclose(compute_cross_track_error(3.0, 1.0, route), 0.0, abs_tol=1e-3)
+    # Точка смещена по Y на 0.2
+    assert math.isclose(compute_cross_track_error(3.0, 1.2, route), 0.2, abs_tol=1e-3)
+    # Пустой маршрут
+    assert compute_cross_track_error(3.0, 1.0, []) == 0.0
+
+
+def test_compute_route_step_with_custom_controller_params():
+    # С большей скоростью max_speed=1.5
+    lin_x, _, _, _ = compute_route_step(
+        cur_x=5.0, cur_y=5.0, cur_theta=0.0, target_x=8.0, target_y=5.0, max_speed=1.5
+    )
+    assert lin_x > 0.5
+    assert lin_x <= 1.5
+
+    # С большей точностью цели goal_tolerance=0.02, dist=0.05 не считается достигнутой
+    _, _, _, reached = compute_route_step(
+        cur_x=5.0, cur_y=5.0, cur_theta=0.0, target_x=5.05, target_y=5.0, goal_tolerance=0.02
+    )
+    assert reached is False
+
+
+def test_draw_route_node_parameters():
+    import rclpy
+    from patrol.draw_route_node import DrawRouteNode
+    from rclpy.parameter import Parameter
+
+    if not rclpy.ok():
+        rclpy.init()
+    try:
+        node = DrawRouteNode()
+        # Проверка дефолтных значений
+        assert node.max_speed == 0.5
+        assert node.goal_tolerance == 0.1
+        assert node.turn_gain == 2.0
+
+        # Установка валидного параметра
+        res = node.set_parameters([Parameter("max_speed", Parameter.Type.DOUBLE, 1.2)])
+        assert res[0].successful is True
+        assert node.max_speed == 1.2
+
+        # Отклонение невалидного goal_tolerance (0.0 должно отклоняться)
+        res_fail = node.set_parameters([Parameter("goal_tolerance", Parameter.Type.DOUBLE, 0.0)])
+        assert res_fail[0].successful is False
+        assert node.goal_tolerance == 0.1  # Состояние не нарушено
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+

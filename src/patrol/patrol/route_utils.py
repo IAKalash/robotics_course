@@ -83,6 +83,82 @@ def filter_and_interpolate_points(
     return result
 
 
+def point_to_segment_distance(
+    px: float, py: float, ax: float, ay: float, bx: float, by: float
+) -> float:
+    """Расстояние от точки P до отрезка AB."""
+    abx = bx - ax
+    aby = by - ay
+    ab_len_sq = abx * abx + aby * aby
+    if ab_len_sq == 0.0:
+        return math.hypot(px - ax, py - ay)
+    # Проекция точки P на прямую AB
+    t = ((px - ax) * abx + (py - ay) * aby) / ab_len_sq
+    t_clamped = max(0.0, min(1.0, t))
+    proj_x = ax + t_clamped * abx
+    proj_y = ay + t_clamped * aby
+    return math.hypot(px - proj_x, py - proj_y)
+
+
+def compute_cross_track_error(
+    cur_x: float, cur_y: float, route_points: list[tuple[float, float]]
+) -> float:
+    """Вычислить минимальное расстояние от текущей позиции до ломаной линии маршрута."""
+    if not route_points:
+        return 0.0
+    if len(route_points) == 1:
+        return math.hypot(cur_x - route_points[0][0], cur_y - route_points[0][1])
+
+    min_dist = float('inf')
+    for i in range(len(route_points) - 1):
+        ax, ay = route_points[i]
+        bx, by = route_points[i + 1]
+        dist = point_to_segment_distance(cur_x, cur_y, ax, ay, bx, by)
+        if dist < min_dist:
+            min_dist = dist
+    return round(min_dist, 4)
+
+
+def validate_max_speed(val: float) -> tuple[bool, str]:
+    """Валидация максимальной скорости контроллера: (0.0, 2.0] м/с."""
+    if not isinstance(val, (int, float)) or isinstance(val, bool):
+        return False, "max_speed must be a number"
+    if not math.isfinite(val):
+        return False, "max_speed must be a finite number"
+    if val <= 0.0:
+        return False, f"max_speed must be positive, got {val}"
+    if val > 2.0:
+        return False, f"max_speed {val} is out of allowed range (0.0, 2.0]"
+    return True, "ok"
+
+
+def validate_goal_tolerance(val: float) -> tuple[bool, str]:
+    """Валидация точности достижения цели: (0.0, 1.0] м.
+
+    Нулевая и отрицательная точность строго отклоняется.
+    """
+    if not isinstance(val, (int, float)) or isinstance(val, bool):
+        return False, "goal_tolerance must be a number"
+    if not math.isfinite(val):
+        return False, "goal_tolerance must be a finite number"
+    if val <= 0.0:
+        return False, f"goal_tolerance must be positive, got {val}"
+    if val > 1.0:
+        return False, f"goal_tolerance {val} is out of allowed range (0.0, 1.0]"
+    return True, "ok"
+
+
+def validate_turn_gain(val: float) -> tuple[bool, str]:
+    """Валидация коэффициента поворота: [0.1, 10.0]."""
+    if not isinstance(val, (int, float)) or isinstance(val, bool):
+        return False, "turn_gain must be a number"
+    if not math.isfinite(val):
+        return False, "turn_gain must be a finite number"
+    if not (0.1 <= val <= 10.0):
+        return False, f"turn_gain {val} is out of allowed range [0.1, 10.0]"
+    return True, "ok"
+
+
 def compute_route_step(
     cur_x: float,
     cur_y: float,
@@ -90,20 +166,26 @@ def compute_route_step(
     target_x: float,
     target_y: float,
     reach_dist: float = 0.1,
+    max_speed: float = 0.5,
+    turn_gain: float = 2.0,
+    goal_tolerance: float | None = None,
 ) -> tuple[float, float, float, bool]:
-    """Вычислить шаг управления к целевой точке.
+    """Вычислить шаг управления к целевой точке с учётом параметров контроллера.
+
+    Параметры:
+        reach_dist / goal_tolerance: радиус попадания в точку (м)
+        max_speed: верхний предел линейной скорости (м/с)
+        turn_gain: коэффициент пропорционального регулятора по углу
 
     Возвращает:
         (linear_velocity, angular_velocity, distance_to_target, is_reached)
-    Ограничения:
-        linear.x in [0.0, 0.5]
-        angular.z in [-1.0, 1.0]
     """
+    effective_tolerance = goal_tolerance if goal_tolerance is not None else reach_dist
     dx = target_x - cur_x
     dy = target_y - cur_y
     dist = math.hypot(dx, dy)
 
-    if dist < reach_dist:
+    if dist < effective_tolerance:
         return 0.0, 0.0, dist, True
 
     target_angle = math.atan2(dy, dx)
@@ -112,10 +194,12 @@ def compute_route_step(
     # При большой ошибке угла разворачиваемся на месте
     if abs(angle_err) > 0.4:
         lin_x = 0.0
-        ang_z = max(-1.0, min(1.0, 2.5 * angle_err))
+        ang_z = max(-1.0, min(1.0, (turn_gain + 0.5) * angle_err))
     else:
         # При малом угле движемся вперед и корректируем направление
-        lin_x = max(0.1, min(0.5, 0.6 * dist))
-        ang_z = max(-1.0, min(1.0, 2.0 * angle_err))
+        # Линейная скорость масштабируется в зависимости от max_speed
+        lin_x = max(0.05, min(max_speed, (max_speed / 0.5) * 0.6 * dist))
+        ang_z = max(-1.0, min(1.0, turn_gain * angle_err))
 
     return round(lin_x, 3), round(ang_z, 3), dist, False
+
