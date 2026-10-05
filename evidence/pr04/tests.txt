@@ -2,9 +2,9 @@
 platform linux -- Python 3.12.3, pytest-7.4.4, pluggy-1.4.0
 rootdir: /media/ilya/C/Programming/robotics/src/patrol
 plugins: ament-xmllint-0.17.5, launch-testing-ros-0.26.12, launch-testing-3.4.11, ament-copyright-0.17.5, ament-lint-0.17.5, ament-flake8-0.17.5, ament-pep257-0.17.5, colcon-core-0.21.1, cov-4.1.0
-collecting ... collected 13 items
+collecting ... collected 19 items
 
-src/patrol/test/test_patrol.py ......                                    [ 46%]
-src/patrol/test/test_route_utils.py .......                              [100%]
+src/patrol/test/test_patrol.py ......                                    [ 31%]
+src/patrol/test/test_route_utils.py .............                        [100%]
 
-============================== 13 passed in 0.51s ==============================
+============================== 19 passed in 0.52s ==============================
