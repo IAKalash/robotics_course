@@ -8,8 +8,8 @@ jobs:
     container:
       image: osrf/ros:jazzy-desktop-full@sha256:d16957210572c5f919f3f9bd2fb0cc24a82542647489d8b8eda7c3beda31305f
     env:
-      COURSE_KIT_URL: https://ros.lms.ci.nsu.ru/downloads/robotics-course-kit-v1-w05-bca214e3de6f.tar.gz
-      COURSE_KIT_SHA256: bca214e3de6f90f9513049dfa0f36fee65ad834da502dc3f3f8fb443517b5197
+      COURSE_KIT_URL: https://ros.lms.ci.nsu.ru/downloads/robotics-course-kit-v1-w07-001f7ec79674.tar.gz
+      COURSE_KIT_SHA256: 001f7ec79674d09a0f7eff2ad0935f58c95101b0cf200425c368f41579d6a31c
     steps:
       - name: Prepare Node for checkout (GitVerse, linux-x64)
         shell: bash
@@ -40,4 +40,4 @@ jobs:
           tar -xzf course-kit.tar.gz -C .course-kit
       - name: Check PR evidence
         shell: bash
-        run: python3 .course-kit/v1/tools/check_practice.py PR05 --submission .
+        run: python3 .course-kit/v1/tools/check_practice.py PR06 --submission .

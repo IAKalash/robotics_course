@@ -10,62 +10,54 @@
 
 ---
 
-## ПР05. Launch, QoS и повтор записи
+## ПР06. Модель робота, tf2 и QoS преобразований
 
 ### Цель работы
-Поднятие системы одной launch-командой в пространстве имён `/robot_a`, запись сенсорного потока в формат MCAP и подтверждение обнаружения и исправления несовместимых профилей QoS (`reliable` подписчик против `best_effort` издателя) на живом потоке и при повторе записи (replay).
+Сборка параметризованной модели Ackermann-робота в формате URDF/Xacro, объединение корпуса (`base_link`), рулевых кулаков, колес и сенсоров (`camera_link`, `lidar_link`, `imu_link`) в единое связное дерево `tf2`. Исследование поведения топика статических трансформаций `/tf_static` при различных политиках QoS (`transient_local` против `volatile`), воспроизведение дефекта некорректного родительского фрейма (`camera_link` вместо `base_link`) и его исправление.
 
-### Структура пакетов
-- `course_bringup` — пакет запуска и ретрансляции данных:
-  - `launch/patrol.launch.py` — запуск системы с аргументами `namespace`, `subscriber_reliability`, `record`, `bag_dir`, группировкой по namespace, переназначениями топиков и условным запуском recorder;
-  - `course_bringup/pose_relay.py` — нода `pose_relay`: читает позу из `input_pose` и публикует в относительный `sensor_pose` с QoS `best_effort`;
-  - `config/qos-overrides.yaml` — профиль переопределения QoS для воспроизведения rosbag2.
-- `patrol` — пакет управления движением:
-  - `patrol/patrol_node.py` — нода `patrol` с настраиваемой надёжностью подписки (`subscriber_reliability`) и относительными топиками (`pose`, `cmd_vel`).
+### Структура пакета `course_description`
+- `urdf/vehicle.urdf.xacro` — параметризованное Xacro-описание модели Ackermann (колесная база 0.8 м, колея 0.62 м, радиус колеса 0.12 м, корпус, сенсоры, рулевые кулаки и колеса);
+- `launch/display.launch.py` — запуск `robot_state_publisher` с разворачиванием Xacro через `Command` и опциональным открытием `rviz2`;
+- `test/test_urdf.py` — автоматические тесты:
+  - корректность разворачивания Xacro в URDF XML;
+  - проверка через `check_urdf`;
+  - проверка родительских связей сенсоров (`base_link`);
+  - проверка геометрических параметров (wheelbase, track_width).
 
-### Сборка и запуск
-1. **Сборка пакетов:**
+### Сборка и проверка
+1. **Сборка пакета:**
    ```bash
-   colcon build --symlink-install
+   colcon build --symlink-install --packages-select course_description
    source install/setup.bash
    ```
 
-2. **Запуск симулятора turtlesim (глобально):**
+2. **Проверка развертывания модели:**
    ```bash
-   ros2 run turtlesim turtlesim_node
+   xacro src/course_description/urdf/vehicle.urdf.xacro > /tmp/vehicle.urdf
+   check_urdf /tmp/vehicle.urdf
    ```
 
-3. **Запуск системы до исправления (несовместимый QoS: `subscriber_reliability:=reliable`):**
+3. **Запуск тестов:**
    ```bash
-   ros2 launch course_bringup patrol.launch.py namespace:=robot_a subscriber_reliability:=reliable record:=false
-   ```
-   Проверка отсутствия приёма сообщений:
-   ```bash
-   timeout 3s ros2 topic echo /robot_a/sensor_pose --qos-reliability reliable --once
+   colcon test --packages-select course_description
+   colcon test-result --verbose
    ```
 
-4. **Запуск системы после исправления (совместимый QoS: `subscriber_reliability:=best_effort`) и запись в MCAP:**
+4. **Запуск `robot_state_publisher`:**
    ```bash
-   ros2 launch course_bringup patrol.launch.py namespace:=robot_a subscriber_reliability:=best_effort record:=false
-   ```
-   Проверка успешного приёма сообщений:
-   ```bash
-   timeout 3s ros2 topic echo /robot_a/sensor_pose --qos-reliability best_effort --once
-   ```
-   Запись топика в MCAP:
-   ```bash
-   ros2 bag record -s mcap -o evidence/pr05/bag --topics /robot_a/sensor_pose
+   ros2 launch course_description display.launch.py
    ```
 
-5. **Воспроизведение записи (Replay) с переопределением QoS:**
+5. **Проверка связей и QoS дерева tf2:**
    ```bash
-   ros2 bag play evidence/pr05/bag --qos-profile-overrides-path config/qos-overrides.yaml
-   ros2 bag info evidence/pr05/bag
+   ros2 run tf2_ros tf2_echo base_link lidar_link
+   ros2 topic echo /tf_static --once
    ```
 
 ---
 
 ## Проверка сдачи (Course Kit Checker)
 ```bash
-python3 .course-kit/v1/tools/check_practice.py PR05 --submission .
+python3 .course-kit/v1/tools/check_practice.py PR06 --submission .
 ```
+
