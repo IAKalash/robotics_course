@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "practice_id": "PR06",
+  "commit": "2a04a0dbf3f5bdc73be2822b7af88c247de4fcce",
+  "course_kit": {
+    "version": "v1-w07",
+    "archive_sha256": "001f7ec79674d09a0f7eff2ad0935f58c95101b0cf200425c368f41579d6a31c"
+  },
+  "commands": [
+    "xacro src/course_description/urdf/vehicle.urdf.xacro > /tmp/vehicle.urdf",
+    "check_urdf /tmp/vehicle.urdf",
+    "colcon build --symlink-install --packages-select course_description",
+    "colcon test --packages-select course_description",
+    "ros2 launch course_description display.launch.py",
+    "ros2 run tf2_ros tf2_echo base_link lidar_link",
+    "ros2 run tf2_tools view_frames",
+    "ros2 topic echo /tf_static --once",
+    "timeout 4 ros2 topic echo /tf_static --once --qos-durability transient_local --qos-reliability reliable",
+    "timeout 4 ros2 topic echo /tf_static --once --qos-durability volatile --qos-reliability reliable"
+  ],
+  "tests": [
+    {
+      "name": "test_xacro_expansion",
+      "status": "passed"
+    },
+    {
+      "name": "test_check_urdf_validation",
+      "status": "passed"
+    },
+    {
+      "name": "test_lidar_parent_is_base_link",
+      "status": "passed"
+    },
+    {
+      "name": "test_sensor_links_parent_connections",
+      "status": "passed"
+    },
+    {
+      "name": "test_ackermann_geometry_parameters",
+      "status": "passed"
+    }
+  ],
+  "defect": {
+    "reproducer": "Смена parent фрейма lidar_link на camera_link в vehicle.urdf.xacro: смещение сенсора в tf2_echo base_link lidar_link составило [0.56, 0.0, 0.76] вместо [0.28, 0.0, 0.38], тест test_lidar_parent_is_base_link упал с ошибкой AssertionError.",
+    "root_cause": "Ошибочное указание дочернего фрейма другого сенсора (camera_link) в качестве родительского для lidar_link вместо несущей рамы base_link. В результате преобразования фреймов сложились в дереве кинематики, сместив лидар вперед и вверх.",
+    "proof_after": "Родителем lidar_link возвращен base_link. Преобразование tf2_echo base_link lidar_link показывает номинальное смещение [0.28, 0.0, 0.38], все 5 тестов course_description и check_urdf успешно пройдены."
+  },
+  "claims": {
+    "public_tests_passed": true,
+    "defect_reproduced": true,
+    "defect_fixed": true
+  },
+  "time": {
+    "contact_academic_hours": 2,
+    "self_study_hours": 2
+  },
+  "ai_used": true
+}
