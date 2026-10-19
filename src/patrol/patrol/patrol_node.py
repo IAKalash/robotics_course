@@ -7,6 +7,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from turtlesim.msg import Pose
 
 if TYPE_CHECKING:
@@ -69,21 +70,20 @@ class PatrolNode(Node):
         self.declare_parameter('linear_speed', 0.5)
         self.declare_parameter('turn_rate', 0.3)
         self.declare_parameter('publish_hz', 10.0)
+        self.declare_parameter('subscriber_reliability', 'reliable')
 
         self.linear_speed = float(self.get_parameter('linear_speed').value)
         self.turn_rate = float(self.get_parameter('turn_rate').value)
         self.publish_hz = float(self.get_parameter('publish_hz').value)
+        self.subscriber_reliability = str(
+            self.get_parameter('subscriber_reliability').value
+        ).lower()
 
         # Регистрация callback для валидации и динамического изменения параметров
         self.add_on_set_parameters_callback(self.parameter_callback)
 
-        # Подписка на позу черепахи
-        self.pose_sub = self.create_subscription(
-            Pose,
-            '/turtle1/pose',
-            self.pose_callback,
-            10,
-        )
+        # Подписка на позу черепахи в относительный топик 'pose' с настраиваемым QoS
+        self.pose_sub = self._create_pose_subscription(self.subscriber_reliability)
 
         # Издатель команды скорости в относительный топик 'cmd_vel'
         self.cmd_pub = self.create_publisher(
@@ -98,7 +98,29 @@ class PatrolNode(Node):
 
         self.get_logger().info(
             f'Нода patrol запущена (linear_speed={self.linear_speed}, '
-            f'turn_rate={self.turn_rate}, publish_hz={self.publish_hz})'
+            f'turn_rate={self.turn_rate}, publish_hz={self.publish_hz}, '
+            f'subscriber_reliability={self.subscriber_reliability})'
+        )
+
+    def _create_pose_subscription(self, reliability: str):
+        """Создать подписку на относительный топик 'pose' с заданным профилем QoS."""
+        if reliability == 'best_effort':
+            qos = QoSProfile(
+                depth=10,
+                reliability=ReliabilityPolicy.BEST_EFFORT,
+                history=HistoryPolicy.KEEP_LAST,
+            )
+        else:
+            qos = QoSProfile(
+                depth=10,
+                reliability=ReliabilityPolicy.RELIABLE,
+                history=HistoryPolicy.KEEP_LAST,
+            )
+        return self.create_subscription(
+            Pose,
+            'pose',
+            self.pose_callback,
+            qos,
         )
 
     def parameter_callback(self, params: list[Parameter]) -> SetParametersResult:
@@ -120,6 +142,12 @@ class PatrolNode(Node):
                 if not ok:
                     self.get_logger().warn(f'Отклонение параметра turn_rate: {reason}')
                     return SetParametersResult(successful=False, reason=reason)
+            elif param.name == 'subscriber_reliability':
+                val = str(param.value).lower()
+                if val not in ('reliable', 'best_effort'):
+                    reason = f"subscriber_reliability must be 'reliable' or 'best_effort', got '{val}'"
+                    self.get_logger().warn(f'Отклонение параметра subscriber_reliability: {reason}')
+                    return SetParametersResult(successful=False, reason=reason)
 
         # 2. Если все параметры валидны — применяем изменения
         for param in params:
@@ -138,6 +166,13 @@ class PatrolNode(Node):
             elif param.name == 'turn_rate':
                 self.turn_rate = float(param.value)
                 self.get_logger().info(f'Установлен turn_rate: {self.turn_rate}')
+            elif param.name == 'subscriber_reliability':
+                new_rel = str(param.value).lower()
+                if new_rel != self.subscriber_reliability:
+                    self.subscriber_reliability = new_rel
+                    self.destroy_subscription(self.pose_sub)
+                    self.pose_sub = self._create_pose_subscription(self.subscriber_reliability)
+                    self.get_logger().info(f'Подписка на позу пересоздана с QoS: {self.subscriber_reliability}')
 
         return SetParametersResult(successful=True)
 

@@ -10,61 +10,62 @@
 
 ---
 
-## ПР04. Параметризуем движение
+## ПР05. Launch, QoS и повтор записи
 
 ### Цель работы
-Расширение ноды `patrol` динамическими параметрами ROS 2 (`linear_speed`, `turn_rate`, `publish_hz`). Добавление параметрического callback для валидации входящих значений без разрушения активного состояния ноды, динамическое пересоздание таймера при изменении частоты публикации, воспроизведение отказа при отключенной валидации (деление на ноль) и доказательство сохранения работоспособности при включенной валидации. Исследование интерфейсов сервисов (`/clear`) и экшенов (`/turtle1/rotate_absolute`).
+Поднятие системы одной launch-командой в пространстве имён `/robot_a`, запись сенсорного потока в формат MCAP и подтверждение обнаружения и исправления несовместимых профилей QoS (`reliable` подписчик против `best_effort` издателя) на живом потоке и при повторе записи (replay).
 
-### Структура пакета `patrol`
-- `package.xml` — манифест пакета и зависимости (`rclpy`, `geometry_msgs`, `turtlesim`).
-- `setup.py` — правила установки пакета и точки входа скриптов (`patrol`, `draw_route`).
-- `patrol/patrol_node.py` — нода `PatrolNode` с объявлением параметров и callback валидации.
-- `test/test_patrol.py` — модульные тесты для чистых функций валидации и вычисления скорости.
+### Структура пакетов
+- `course_bringup` — пакет запуска и ретрансляции данных:
+  - `launch/patrol.launch.py` — запуск системы с аргументами `namespace`, `subscriber_reliability`, `record`, `bag_dir`, группировкой по namespace, переназначениями топиков и условным запуском recorder;
+  - `course_bringup/pose_relay.py` — нода `pose_relay`: читает позу из `input_pose` и публикует в относительный `sensor_pose` с QoS `best_effort`;
+  - `config/qos-overrides.yaml` — профиль переопределения QoS для воспроизведения rosbag2.
+- `patrol` — пакет управления движением:
+  - `patrol/patrol_node.py` — нода `patrol` с настраиваемой надёжностью подписки (`subscriber_reliability`) и относительными топиками (`pose`, `cmd_vel`).
 
 ### Сборка и запуск
-1. **Сборка пакета и запуск тестов:**
+1. **Сборка пакетов:**
    ```bash
-   colcon build --symlink-install --packages-select patrol
+   colcon build --symlink-install
    source install/setup.bash
-   python3 -m pytest src/patrol/test
    ```
 
-2. **Запуск симулятора:**
+2. **Запуск симулятора turtlesim (глобально):**
    ```bash
-   ros2 launch turtle_bringup sim.launch.py
+   ros2 run turtlesim turtlesim_node
    ```
 
-3. **Запуск ноды патрулирования (с переназначением топика):**
+3. **Запуск системы до исправления (несовместимый QoS: `subscriber_reliability:=reliable`):**
    ```bash
-   ros2 run patrol patrol --ros-args -r cmd_vel:=/turtle1/cmd_vel
+   ros2 launch course_bringup patrol.launch.py namespace:=robot_a subscriber_reliability:=reliable record:=false
    ```
-
-4. **Динамическое изменение параметров в рантайме:**
+   Проверка отсутствия приёма сообщений:
    ```bash
-   # Изменение частоты публикации на 5 Гц:
-   ros2 param set /patrol publish_hz 5.0
-
-   # Попытка установки недопустимого значения (будет отклонена):
-   ros2 param set /patrol publish_hz 0.0
+   timeout 3s ros2 topic echo /robot_a/sensor_pose --qos-reliability reliable --once
    ```
 
-### Дополнительная часть: Настройки контроллера маршрута (`draw_route`)
-1. **Запуск графического интерфейса с ползунками параметров:**
+4. **Запуск системы после исправления (совместимый QoS: `subscriber_reliability:=best_effort`) и запись в MCAP:**
    ```bash
-   ros2 run patrol draw_route
+   ros2 launch course_bringup patrol.launch.py namespace:=robot_a subscriber_reliability:=best_effort record:=false
    ```
-2. **Параметры контроллера (`draw_route`):**
-   - `max_speed` (`(0.0, 2.0]` м/с, по умолчанию `0.5`) — максимальная линейная скорость.
-   - `goal_tolerance` (`(0.0, 1.0]` м, по умолчанию `0.1`) — радиус достижения промежуточной цели. Нулевые и отрицательные значения строго отклоняются.
-   - `turn_gain` (`[0.1, 10.0]`, по умолчанию `2.0`) — коэффициент P-регулятора угла.
-3. **Возможности интерфейса:**
-   - Интерактивные ползунки параметров справа от холста с синхронизацией через ROS 2 Parameter Server;
-   - Кнопка **«Повторить»** для повторного запуска по нарисованной траектории с новыми параметрами;
-   - Измерение времени прохождения и отклонения (cross-track error) для сравнения проходов с разной скоростью.
+   Проверка успешного приёма сообщений:
+   ```bash
+   timeout 3s ros2 topic echo /robot_a/sensor_pose --qos-reliability best_effort --once
+   ```
+   Запись топика в MCAP:
+   ```bash
+   ros2 bag record -s mcap -o evidence/pr05/bag --topics /robot_a/sensor_pose
+   ```
+
+5. **Воспроизведение записи (Replay) с переопределением QoS:**
+   ```bash
+   ros2 bag play evidence/pr05/bag --qos-profile-overrides-path config/qos-overrides.yaml
+   ros2 bag info evidence/pr05/bag
+   ```
 
 ---
 
 ## Проверка сдачи (Course Kit Checker)
 ```bash
-python3 .course-kit/v1/tools/check_practice.py PR04 --submission .
+python3 .course-kit/v1/tools/check_practice.py PR05 --submission .
 ```
