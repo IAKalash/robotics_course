@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "practice_id": "PR05",
+  "commit": "b6411ba15fb23856dccaa4551e953466cc89e405",
+  "course_kit": {
+    "version": "v1-w05",
+    "archive_sha256": "bca214e3de6f90f9513049dfa0f36fee65ad834da502dc3f3f8fb443517b5197"
+  },
+  "commands": [
+    "colcon build --symlink-install",
+    "colcon test",
+    "ros2 launch course_bringup patrol.launch.py namespace:=robot_a subscriber_reliability:=reliable record:=false",
+    "timeout 3s ros2 topic echo /robot_a/sensor_pose --qos-reliability reliable --once",
+    "ros2 launch course_bringup patrol.launch.py namespace:=robot_a subscriber_reliability:=best_effort record:=false",
+    "timeout 3s ros2 topic echo /robot_a/sensor_pose --qos-reliability best_effort --once",
+    "ros2 bag record -s mcap -o evidence/pr05/bag --topics /robot_a/sensor_pose",
+    "ros2 bag play evidence/pr05/bag --qos-profile-overrides-path config/qos-overrides.yaml",
+    "ros2 bag info evidence/pr05/bag",
+    "cp evidence/pr05/bag/metadata.yaml evidence/pr05/bag-metadata.yaml"
+  ],
+  "tests": [
+    {
+      "name": "test_pose_relay_node_qos",
+      "status": "passed"
+    },
+    {
+      "name": "test_launch_description_arguments",
+      "status": "passed"
+    },
+    {
+      "name": "test_validate_publish_hz_valid",
+      "status": "passed"
+    },
+    {
+      "name": "test_validate_publish_hz_invalid",
+      "status": "passed"
+    },
+    {
+      "name": "test_compute_cmd_vel_with_pose_and_custom_params",
+      "status": "passed"
+    }
+  ],
+  "defect": {
+    "reproducer": "ros2 launch course_bringup patrol.launch.py namespace:=robot_a subscriber_reliability:=reliable record:=false && timeout 3s ros2 topic echo /robot_a/sensor_pose --qos-reliability reliable --once",
+    "root_cause": "Несовместимость политик надёжности QoS: издатель ноды pose_relay передаёт данные с профилем Best Effort, в то время как подписчик запрашивает Reliable. Согласно спецификации DDS, связь не устанавливается, топик присутствует в списке, но доставка сообщений блокируется middleware.",
+    "proof_after": "Подписчик переключён на Best Effort (subscriber_reliability:=best_effort). Сообщения успешно доставляются как на живом топике /robot_a/sensor_pose, так и при воспроизведении сохранённого MCAP bag-файла с переопределением QoS через config/qos-overrides.yaml."
+  },
+  "time": {
+    "contact_academic_hours": 2,
+    "self_study_hours": 2
+  },
+  "ai_used": true,
+  "claims": {
+    "public_tests_passed": true,
+    "defect_reproduced": true,
+    "defect_fixed": true,
+    "replay_verified": true
+  }
+}
